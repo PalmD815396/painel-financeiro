@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle Financeiro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Calm Neutrals -->
+    <!-- Application Structure Plan: A aplicação foi estruturada como um painel de controle (dashboard) de página única para máxima usabilidade. A hierarquia visual prioriza as informações mais críticas: 1) Cartões de resumo (Receita, Despesa, Saldo) no topo para uma visão geral instantânea. 2) Gráficos interativos no centro para análise visual das despesas. 3) Um formulário para adicionar transações e uma lista detalhada na base, permitindo interação direta e consulta de dados. Esta estrutura transforma um relatório estático em uma ferramenta dinâmica, onde o usuário pode ver o impacto de cada lançamento em tempo real, facilitando a tomada de decisões financeiras. -->
+    <!-- Visualization & Content Choices: Receita/Despesa/Saldo -> Informar -> Cartões de Destaque (HTML/Tailwind) -> Atualização dinâmica via JS para feedback imediato. Despesas por Categoria -> Proporção -> Gráfico de Rosca (Chart.js) -> Interativo com tooltips, ideal para visualizar a composição dos gastos. Receitas vs. Despesas -> Comparar -> Gráfico de Barras (Chart.js) -> Comparação visual direta e clara. Lançamentos -> Detalhar/Organizar -> Tabela HTML -> Permite consulta e gerenciamento dos dados brutos. Adicionado um novo gráfico de linha para mostrar a evolução anual das finanças. A combinação destes elementos oferece uma experiência completa, do resumo ao detalhe. Adicionado o campo de tipo de renda (fixa/variável) para permitir uma categorização mais detalhada das receitas e um campo de localização para rastrear onde as transações ocorreram. Adicionado um botão para excluir lançamentos. A moeda foi alterada para Euro (€). Transações de exemplo foram removidas. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4;
+            color: #3f3c3a;
+        }
+        .metric-card {
+            background-color: #ffffff;
+            border: 1px solid #e7e5e4;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 320px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 380px;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-[#2a2827]">Painel de Controle Financeiro</h1>
+            <p class="text-md text-gray-500 mt-2">Visualize e gerencie suas finanças de forma simples e interativa.</p>
+        </header>
+
+        <main>
+            <section id="metrics" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="metric-card">
+                    <h2 class="text-lg font-semibold text-gray-500">Receita Total</h2>
+                    <p id="total-revenue" class="text-3xl font-bold text-emerald-600 mt-2">€ 0,00</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="text-lg font-semibold text-gray-500">Despesa Total</h2>
+                    <p id="total-expense" class="text-3xl font-bold text-red-600 mt-2">€ 0,00</p>
+                </div>
+                <div class="metric-card">
+                    <h2 class="text-lg font-semibold text-gray-500">Saldo Atual</h2>
+                    <p id="current-balance" class="text-3xl font-bold text-gray-800 mt-2">€ 0,00</p>
+                </div>
+            </section>
+
+            <section id="charts" class="grid grid-cols-1 lg:grid-cols-5 gap-8 mb-8">
+                <div class="lg:col-span-3 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 class="text-xl font-semibold mb-4 text-center">Análise de Despesas por Categoria</h3>
+                    <p class="text-center text-gray-500 mb-4 text-sm">Este gráfico mostra a proporção de seus gastos em diferentes áreas. Passe o mouse sobre as fatias para ver os valores exatos e entender para onde seu dinheiro está indo.</p>
+                    <div class="chart-container mx-auto max-w-md">
+                        <canvas id="expensesChart"></canvas>
+                    </div>
+                </div>
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 class="text-xl font-semibold mb-4 text-center">Receitas vs. Despesas (Geral)</h3>
+                     <p class="text-center text-gray-500 mb-4 text-sm">Compare o total de suas receitas com o total de despesas para uma visão clara do seu fluxo de caixa mensal.</p>
+                    <div class="chart-container mx-auto max-w-sm">
+                        <canvas id="revenueExpenseChart"></canvas>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="annual-chart-section" class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm mb-8">
+                <h3 class="text-xl font-semibold mb-4 text-center">Comparativo Anual</h3>
+                <p class="text-center text-gray-500 mb-4 text-sm">Acompanhe a evolução de suas receitas e despesas ao longo dos anos.</p>
+                <div class="chart-container mx-auto">
+                    <canvas id="annualChart"></canvas>
+                </div>
+            </section>
+            
+            <section id="interaction" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 class="text-xl font-semibold mb-4">Adicionar Nova Transação</h3>
+                    <form id="transaction-form" class="space-y-4">
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Descrição</label>
+                            <input type="text" id="description" name="description" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="location" class="block text-sm font-medium text-gray-700">Localização</label>
+                            <input type="text" id="location" name="location" placeholder="Ex: Lisboa, Loja X" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="amount" class="block text-sm font-medium text-gray-700">Valor (€)</label>
+                            <input type="number" id="amount" name="amount" step="0.01" required placeholder="Ex: 50.00" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="type" class="block text-sm font-medium text-gray-700">Tipo</label>
+                                <select id="type" name="type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                    <option value="expense">Despesa</option>
+                                    <option value="revenue">Receita</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="category" class="block text-sm font-medium text-gray-700">Categoria</label>
+                                <select id="category" name="category" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                    <option>Moradia</option>
+                                    <option>Alimentação</option>
+                                    <option>Transporte</option>
+                                    <option>Lazer</option>
+                                    <option>Dívidas</option>
+                                    <option>Saúde</option>
+                                    <option>Educação</option>
+                                    <option>Outros</option>
+                                </select>
+                            </div>
+                        </div>
+                         <div id="income-type-container" class="hidden">
+                            <label for="income-type" class="block text-sm font-medium text-gray-700">Tipo de Renda</label>
+                            <select id="income-type" name="income-type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="fixed">Fixa</option>
+                                <option value="variable">Variável</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                            Adicionar
+                        </button>
+                    </form>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <h3 class="text-xl font-semibold mb-4">Últimos Lançamentos</h3>
+                    <div class="overflow-auto h-96">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transaction-list" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Transações de exemplo para popular o painel inicialmente
+        let transactions = [];
+
+        // Referências para elementos do DOM
+        const form = document.getElementById('transaction-form');
+        const typeSelect = document.getElementById('type');
+        const categorySelect = document.getElementById('category');
+        const incomeTypeContainer = document.getElementById('income-type-container');
+        const incomeTypeSelect = document.getElementById('income-type');
+
+        // Categorias predefinidas
+        const revenueCategories = ['Salário', 'Renda Extra', 'Investimentos', 'Outros'];
+        const expenseCategories = ['Moradia', 'Alimentação', 'Transporte', 'Lazer', 'Dívidas', 'Saúde', 'Educação', 'Empréstimo', 'Outros'];
+
+        // Função para atualizar as opções de categoria com base no tipo de transação (receita/despesa)
+        const updateCategoryOptions = () => {
+            const currentType = typeSelect.value;
+            const categories = currentType === 'revenue' ? revenueCategories : expenseCategories;
+            
+            // Mostra ou esconde o campo de tipo de renda
+            if (currentType === 'revenue') {
+                incomeTypeContainer.classList.remove('hidden');
+            } else {
+                incomeTypeContainer.classList.add('hidden');
+            }
+
+            // Popula o campo de categoria com as opções corretas
+            categorySelect.innerHTML = '';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                categorySelect.appendChild(option);
+            });
+        };
+        
+        // Escuta a mudança no tipo de transação para atualizar as categorias
+        typeSelect.addEventListener('change', updateCategoryOptions);
+
+        // Funções para gerenciar o painel
+        const formatCurrency = (value) => {
+            return new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
+        };
+        
+        // Funções para gerenciar gráficos
+        const expensesCtx = document.getElementById('expensesChart').getContext('2d');
+        const expensesChart = new Chart(expensesCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: ['#4f46e5', '#f97316', '#10b981', '#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'],
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            boxWidth: 12,
+                            font: {
+                                size: 12,
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed !== null) {
+                                    label += new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(context.parsed);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const revenueExpenseCtx = document.getElementById('revenueExpenseChart').getContext('2d');
+        const revenueExpenseChart = new Chart(revenueExpenseCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Fluxo de Caixa'],
+                datasets: [
+                    {
+                        label: 'Receitas',
+                        data: [0],
+                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Despesas',
+                        data: [0],
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                        borderColor: 'rgba(239, 68, 68, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '€ ' + value;
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                }
+            }
+        });
+
+        // Configuração do novo gráfico de linha para análise anual
+        const annualCtx = document.getElementById('annualChart').getContext('2d');
+        const annualChart = new Chart(annualCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Receitas Anuais',
+                        data: [],
+                        borderColor: 'rgba(16, 185, 129, 0.7)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                        fill: false,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Despesas Anuais',
+                        data: [],
+                        borderColor: 'rgba(239, 68, 68, 0.7)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                        fill: false,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Valor (€)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Ano'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                }
+            }
+        });
+
+        // Função para remover uma transação
+        window.deleteTransaction = (id) => {
+            // Filtra o array de transações, removendo o item com o ID correspondente
+            transactions = transactions.filter(t => t.id !== id);
+            // Atualiza o painel para refletir a mudança
+            updateDashboard();
+        };
+
+        // Função principal para atualizar todos os elementos do painel
+        const updateDashboard = () => {
+            // Calcula os totais de receita e despesa
+            const totalRevenue = transactions.filter(t => t.type === 'revenue').reduce((sum, t) => sum + t.amount, 0);
+            const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+            const currentBalance = totalRevenue - totalExpense;
+
+            // Atualiza os cartões de métricas
+            document.getElementById('total-revenue').textContent = formatCurrency(totalRevenue);
+            document.getElementById('total-expense').textContent = formatCurrency(totalExpense);
+            document.getElementById('current-balance').textContent = formatCurrency(currentBalance);
+            document.getElementById('current-balance').style.color = currentBalance >= 0 ? '#1f2937' : '#dc2626';
+
+            // Prepara dados para o gráfico de despesas
+            const expenseData = transactions
+                .filter(t => t.type === 'expense')
+                .reduce((acc, t) => {
+                    acc[t.category] = (acc[t.category] || 0) + t.amount;
+                    return acc;
+                }, {});
+
+            expensesChart.data.labels = Object.keys(expenseData);
+            expensesChart.data.datasets[0].data = Object.values(expenseData);
+            expensesChart.update();
+
+            // Prepara dados para o gráfico de barras de receitas vs. despesas
+            revenueExpenseChart.data.datasets[0].data[0] = totalRevenue;
+            revenueExpenseChart.data.datasets[1].data[0] = totalExpense;
+            revenueExpenseChart.update();
+
+            // Prepara dados para o novo gráfico anual
+            const annualData = transactions.reduce((acc, t) => {
+                const year = new Date(t.date).getFullYear();
+                if (!acc[year]) {
+                    acc[year] = { revenue: 0, expense: 0 };
+                }
+                if (t.type === 'revenue') {
+                    acc[year].revenue += t.amount;
+                } else {
+                    acc[year].expense += t.amount;
+                }
+                return acc;
+            }, {});
+
+            const sortedYears = Object.keys(annualData).sort();
+            const annualRevenues = sortedYears.map(year => annualData[year].revenue);
+            const annualExpenses = sortedYears.map(year => annualData[year].expense);
+
+            annualChart.data.labels = sortedYears;
+            annualChart.data.datasets[0].data = annualRevenues;
+            annualChart.data.datasets[1].data = annualExpenses;
+            annualChart.update();
+
+            // Atualiza a tabela de lançamentos
+            const transactionList = document.getElementById('transaction-list');
+            transactionList.innerHTML = '';
+            transactions.slice().reverse().forEach(t => {
+                const row = document.createElement('tr');
+                const isExpense = t.type === 'expense';
+                const incomeTypeLabel = t.type === 'revenue' ? `(${t.incomeType === 'fixed' ? 'Fixa' : 'Variável'})` : '';
+                const locationLabel = t.location ? `<div class="text-xs text-gray-500">${t.location}</div>` : '';
+                row.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${t.description}</div>
+                        <div class="text-xs text-gray-500">${t.category} ${incomeTypeLabel}</div>
+                        ${locationLabel}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium ${isExpense ? 'text-red-600' : 'text-emerald-600'}">
+                        ${isExpense ? '-' : '+'} ${formatCurrency(t.amount)}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="deleteTransaction(${t.id})" class="text-red-500 hover:text-red-700 font-bold">X</button>
+                    </td>
+                `;
+                transactionList.appendChild(row);
+            });
+        };
+
+        // Escuta o envio do formulário para adicionar uma nova transação
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newTransaction = {
+                id: Date.now(),
+                date: new Date().toISOString(), // Adiciona a data atual
+                description: form.description.value,
+                location: form.location.value,
+                amount: parseFloat(form.amount.value),
+                type: form.type.value,
+                category: form.category.value
+            };
+            if (newTransaction.type === 'revenue') {
+                newTransaction.incomeType = form['income-type'].value;
+            }
+            transactions.push(newTransaction);
+            updateDashboard();
+            form.reset();
+            updateCategoryOptions();
+        });
+        
+        // Chamadas iniciais para popular o painel quando a página carrega
+        updateCategoryOptions();
+        updateDashboard();
+    </script>
+</body>
+</html>
